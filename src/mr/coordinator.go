@@ -182,6 +182,8 @@ func (c *Coordinator) Done() bool {
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c := Coordinator{
 		nReduce:      nReduce,
+		mapTaskps:    map[int]*Task{},
+		reduceTasks:  map[int]*Task{},
 		intermediate: []string{},
 	}
 
