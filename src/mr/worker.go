@@ -1,10 +1,15 @@
 package mr
 
-import "fmt"
-import "log"
-import "net/rpc"
-import "hash/fnv"
-
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"sort"
+	"log"
+	"net/rpc"
+	"hash/fnv"
+)
 
 //
 // Map functions return a slice of KeyValue.
@@ -13,6 +18,12 @@ type KeyValue struct {
 	Key   string
 	Value string
 }
+
+type KeyValueSlice []KeyValue
+
+func (s KeyValueSlice) Len() int           { return len(s) }
+func (s KeyValueSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s KeyValueSlice) Less(i, j int) bool { return s[i].Key < s[j].Key }
 
 //
 // use ihash(key) % NReduce to choose the reduce
@@ -24,7 +35,6 @@ func ihash(key string) int {
 	return int(h.Sum32() & 0x7fffffff)
 }
 
-
 //
 // main/mrworker.go calls this function.
 //
@@ -32,10 +42,98 @@ func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
 	// Your worker implementation here.
+	for {
+		args := AskForTaskArgs{}
+		reply := AskForTaskReply{}
+		call("Coordinator.AskForTask", &args, &reply)
+		if reply.Done {
+			return
+		}
+		if reply.Task.Type == TaskType_Map {
+			intermediate := []KeyValue{}
+			nReduce := reply.ReduceN
+			for _, filename := range reply.Task.InputFile {
+				content, err := ioutil.ReadFile(filename)
+				if err != nil {
+					log.Fatal(err)
+				}
+				kva := mapf(filename, string(content))
+				intermediate = append(intermediate, kva...)
+			}
+			intermediateFile := map[int]string{}
+			sort.Sort(KeyValueSlice(intermediate))
+			for _, kv := range intermediate {
+				i := ihash(kv.Key) % nReduce
+				if _, has := intermediateFile[i+1]; !has {
+					f, err := ioutil.TempFile(".", "mr-")
+					if err != nil {
+						log.Fatal(err)
+					}
+					intermediateFile[i+1] = f.Name()
+				}
 
+				f, err := os.Open(intermediateFile[i+1])
+				if err != nil {
+					log.Fatal(err)
+				}
+				enc := json.NewEncoder(f)
+				if err := enc.Encode(&kv); err != nil {
+					log.Println(err)
+					continue
+				}
+			}
+
+			ofiles := []string{}
+			for i, filename := range intermediateFile {
+				ofile := fmt.Sprintf("mr-%d-%d", reply.Task.Index, i)
+				ofiles = append(ofiles, ofile)
+				os.Rename(filename, ofile)
+			}
+			call("Coordinator.FinishTask", &FinishTaskArgs{Type: reply.Task.Type,
+				Index: reply.Task.Index, OutputFile: ofiles}, &FinishTaskReply{})
+		} else {
+			intermediate := []KeyValue{}
+			for _, filename := range reply.Task.InputFile {
+				f, err := os.Open(filename)
+				if err != nil {
+					log.Fatal(err)
+				}
+				dec := json.NewDecoder(f)
+				for {
+					var kv KeyValue
+					if err := dec.Decode(&kv); err != nil {
+						break
+					}
+					intermediate = append(intermediate, kv)
+				}
+			}
+			sort.Sort(KeyValueSlice(intermediate))
+
+			f, err := ioutil.TempFile(".", "mr-")
+			if err != nil {
+				log.Fatal(err)
+			}
+			i := 0
+			for i < len(intermediate) {
+				j := i + 1
+				for j < len(intermediate) && intermediate[j].Key == intermediate[i].Key {
+					j++
+				}
+				values := []string{}
+				for k := i; k < j; k++ {
+					values = append(values, intermediate[k].Value)
+				}
+				output := reducef(intermediate[i].Key, values)
+				fmt.Fprintf(f, "%v %v\n", intermediate[i].Key, output)
+				i = j
+			}
+			os.Rename(f.Name(), fmt.Sprintf("mr-out-%d", reply.Task.Index))
+			call("Coordinator.FinishTask", &FinishTaskArgs{Type: reply.Task.Type,
+				Index: reply.Task.Index}, &FinishTaskReply{})
+		}
+	}
 	// uncomment to send the Example RPC to the coordinator.
-	// CallExample()
-
+	//CallExample()
 }
 
 //
