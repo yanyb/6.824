@@ -49,6 +49,7 @@ func (c *Coordinator) AskForTask(args *AskForTaskArgs, reply *AskForTaskReply) e
 		c.l.Lock()
 		if c.done {
 			reply.Done = c.done
+			c.l.Unlock()
 			return nil
 		}
 		if !c.reduceEnable {
