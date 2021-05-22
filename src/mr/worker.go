@@ -61,6 +61,7 @@ func Worker(mapf func(string, string) []KeyValue,
 				intermediate = append(intermediate, kva...)
 			}
 			intermediateFile := map[int]string{}
+			fileMap := map[int]*os.File{}
 			sort.Sort(KeyValueSlice(intermediate))
 			for _, kv := range intermediate {
 				i := ihash(kv.Key) % nReduce
@@ -70,12 +71,9 @@ func Worker(mapf func(string, string) []KeyValue,
 						log.Fatal(err)
 					}
 					intermediateFile[i+1] = f.Name()
+					fileMap[i+1] = f
 				}
-
-				f, err := os.Open(intermediateFile[i+1])
-				if err != nil {
-					log.Fatal(err)
-				}
+				f := fileMap[i+1]
 				enc := json.NewEncoder(f)
 				if err := enc.Encode(&kv); err != nil {
 					log.Println(err)
@@ -88,6 +86,10 @@ func Worker(mapf func(string, string) []KeyValue,
 				ofile := fmt.Sprintf("mr-%d-%d", reply.Task.Index, i)
 				ofiles = append(ofiles, ofile)
 				os.Rename(filename, ofile)
+			}
+
+			for _, f := range fileMap {
+				f.Close()
 			}
 			call("Coordinator.FinishTask", &FinishTaskArgs{Type: reply.Task.Type,
 				Index: reply.Task.Index, OutputFile: ofiles}, &FinishTaskReply{})
@@ -128,6 +130,7 @@ func Worker(mapf func(string, string) []KeyValue,
 				i = j
 			}
 			os.Rename(f.Name(), fmt.Sprintf("mr-out-%d", reply.Task.Index))
+			f.Close()
 			call("Coordinator.FinishTask", &FinishTaskArgs{Type: reply.Task.Type,
 				Index: reply.Task.Index}, &FinishTaskReply{})
 		}
