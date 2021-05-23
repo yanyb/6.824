@@ -52,6 +52,9 @@ func Worker(mapf func(string, string) []KeyValue,
 		if reply.Task == nil {
 			continue
 		}
+
+		fmt.Println("xxxxx:", reply.Task.Index, reply.Task.Index)
+
 		if reply.Task.Type == TaskType_Map {
 			intermediate := []KeyValue{}
 			nReduce := reply.ReduceN
@@ -111,6 +114,7 @@ func Worker(mapf func(string, string) []KeyValue,
 					}
 					intermediate = append(intermediate, kv)
 				}
+				f.Close()
 			}
 			sort.Sort(KeyValueSlice(intermediate))
 
