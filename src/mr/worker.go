@@ -52,9 +52,7 @@ func Worker(mapf func(string, string) []KeyValue,
 		if reply.Task == nil {
 			continue
 		}
-
-		fmt.Println("xxxxx:", reply.Task.Index, reply.Task.Index)
-
+		fmt.Println("xxxxx:", reply.Task.Index, reply.Task.Type)
 		if reply.Task.Type == TaskType_Map {
 			intermediate := []KeyValue{}
 			nReduce := reply.ReduceN
@@ -141,6 +139,7 @@ func Worker(mapf func(string, string) []KeyValue,
 			call("Coordinator.FinishTask", &FinishTaskArgs{Type: reply.Task.Type,
 				Index: reply.Task.Index}, &FinishTaskReply{})
 		}
+		fmt.Println("yyyyy:", reply.Task.Index, reply.Task.Type)
 	}
 	// uncomment to send the Example RPC to the coordinator.
 	//CallExample()
