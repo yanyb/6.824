@@ -26,7 +26,7 @@ const (
 type Coordinator struct {
 	// Your definitions here.
 	nReduce      int
-	l            sync.Mutex
+	l            sync.RWMutex
 	mapTaskps    map[int]*Task
 	reduceTasks  map[int]*Task
 	intermediate []string
@@ -164,7 +164,9 @@ func (c *Coordinator) server() {
 // if the entire job has finished.
 //
 func (c *Coordinator) Done() bool {
+	c.l.RLock()
 	ret := c.done
+	c.l.RUnlock()
 
 	// Your code here.
 
