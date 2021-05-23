@@ -105,16 +105,15 @@ func (c *Coordinator) FinishTask(args *FinishTaskArgs, reply *FinishTaskReply) e
 				if _, err := fmt.Sscanf(imFile, "mr-%d-%d", mapNum, reduceNum); err != nil {
 					log.Println(err)
 				} else {
-					if reduce, has := c.reduceTasks[reduceNum]; !has {
+					if _, has := c.reduceTasks[reduceNum]; !has {
 						c.reduceTasks[reduceNum] = &Task{
 							Type:      TaskType_Reduce,
 							Index:     reduceNum,
 							Status:    Status_NonDistributed,
 							InputFile: []string{},
 						}
-					} else {
-						reduce.InputFile = append(reduce.InputFile, imFile)
 					}
+					c.reduceTasks[reduceNum].InputFile = append(c.reduceTasks[reduceNum].InputFile, imFile)
 				}
 			}
 		}
