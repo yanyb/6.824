@@ -49,6 +49,9 @@ func Worker(mapf func(string, string) []KeyValue,
 		if reply.Done {
 			return
 		}
+		if reply.Task == nil {
+			continue
+		}
 		if reply.Task.Type == TaskType_Map {
 			intermediate := []KeyValue{}
 			nReduce := reply.ReduceN

@@ -45,42 +45,40 @@ type Task struct {
 // Your code here -- RPC handlers for the worker to call.
 
 func (c *Coordinator) AskForTask(args *AskForTaskArgs, reply *AskForTaskReply) error {
-	for {
-		c.l.Lock()
-		if c.done {
-			reply.Done = c.done
-			c.l.Unlock()
-			return nil
-		}
-		if !c.reduceEnable {
-			for _, task := range c.mapTaskps {
-				if time.Now().Sub(task.DistrubeteTime) > 10*time.Second {
-					task.Status = Status_Failed
-				}
-				if task.Status == Status_NonDistributed || task.Status == Status_Failed {
-					task.Status = Status_Distributed
-					task.DistrubeteTime = time.Now()
-					reply.Task = task
-					reply.ReduceN = c.nReduce
-					return nil
-				}
-			}
-		} else {
-			for _, task := range c.reduceTasks {
-				if time.Now().Sub(task.DistrubeteTime) > 10*time.Second {
-					task.Status = Status_Failed
-				}
-				if task.Status == Status_NonDistributed || task.Status == Status_Failed {
-					task.Status = Status_Distributed
-					task.DistrubeteTime = time.Now()
-					reply.Task = task
-					reply.ReduceN = c.nReduce
-					return nil
-				}
-			}
-		}
+	c.l.Lock()
+	if c.done {
+		reply.Done = c.done
 		c.l.Unlock()
+		return nil
 	}
+	if !c.reduceEnable {
+		for _, task := range c.mapTaskps {
+			if task.Status == Status_Distributed && time.Now().Sub(task.DistrubeteTime) > 10*time.Second {
+				task.Status = Status_Failed
+			}
+			if task.Status == Status_NonDistributed || task.Status == Status_Failed {
+				task.Status = Status_Distributed
+				task.DistrubeteTime = time.Now()
+				reply.Task = task
+				reply.ReduceN = c.nReduce
+				return nil
+			}
+		}
+	} else {
+		for _, task := range c.reduceTasks {
+			if task.Status == Status_Distributed && time.Now().Sub(task.DistrubeteTime) > 10*time.Second {
+				task.Status = Status_Failed
+			}
+			if task.Status == Status_NonDistributed || task.Status == Status_Failed {
+				task.Status = Status_Distributed
+				task.DistrubeteTime = time.Now()
+				reply.Task = task
+				reply.ReduceN = c.nReduce
+				return nil
+			}
+		}
+	}
+	c.l.Unlock()
 	return nil
 }
 
