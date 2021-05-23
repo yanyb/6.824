@@ -46,9 +46,9 @@ type Task struct {
 
 func (c *Coordinator) AskForTask(args *AskForTaskArgs, reply *AskForTaskReply) error {
 	c.l.Lock()
+	defer c.l.Unlock()
 	if c.done {
 		reply.Done = c.done
-		c.l.Unlock()
 		return nil
 	}
 	if !c.reduceEnable {

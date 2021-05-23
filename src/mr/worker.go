@@ -52,7 +52,6 @@ func Worker(mapf func(string, string) []KeyValue,
 		if reply.Task == nil {
 			continue
 		}
-		fmt.Println("xxxxx:", reply.Task.Index, reply.Task.Type)
 		if reply.Task.Type == TaskType_Map {
 			intermediate := []KeyValue{}
 			nReduce := reply.ReduceN
