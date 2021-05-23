@@ -101,7 +101,7 @@ func (c *Coordinator) FinishTask(args *FinishTaskArgs, reply *FinishTaskReply) e
 		if done {
 			for _, imFile := range c.intermediate {
 				var mapNum, reduceNum int
-				if _, err := fmt.Sscanf(imFile, "mr-%d-%d", mapNum, reduceNum); err != nil {
+				if _, err := fmt.Sscanf(imFile, "mr-%d-%d", &mapNum, &reduceNum); err != nil {
 					log.Println(err)
 				} else {
 					if _, has := c.reduceTasks[reduceNum]; !has {
