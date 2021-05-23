@@ -138,7 +138,6 @@ func Worker(mapf func(string, string) []KeyValue,
 			call("Coordinator.FinishTask", &FinishTaskArgs{Type: reply.Task.Type,
 				Index: reply.Task.Index}, &FinishTaskReply{})
 		}
-		fmt.Println("yyyyy:", reply.Task.Index, reply.Task.Type)
 	}
 	// uncomment to send the Example RPC to the coordinator.
 	//CallExample()

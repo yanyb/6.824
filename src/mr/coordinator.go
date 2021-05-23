@@ -78,7 +78,6 @@ func (c *Coordinator) AskForTask(args *AskForTaskArgs, reply *AskForTaskReply) e
 			}
 		}
 	}
-	c.l.Unlock()
 	return nil
 }
 
