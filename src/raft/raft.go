@@ -100,6 +100,9 @@ type Raft struct {
 
 	heartbeatTime time.Duration
 
+	// for cpu optimization
+	reSetElectionTimerCond *sync.Cond
+
 	// applier conditional variable
 	cond *sync.Cond
 }
@@ -221,12 +224,14 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 			rf.votedFor = args.CandidateId
 			reply.VoteGranted = true
 		}
+		rf.reSetElectionTimerCond.Broadcast()
 	} else if isLogUpToDate {
 		if rf.votedFor == nil || rf.votedFor == args.CandidateId {
 			rf.votedFor = args.CandidateId
 			rf.state = Follower
 			rf.isElectionTimeOut = false
 			reply.VoteGranted = true
+			rf.reSetElectionTimerCond.Broadcast()
 		}
 	}
 	return
@@ -341,6 +346,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.currentTerm = args.Term
 		rf.votedFor = nil
 	}
+	rf.reSetElectionTimerCond.Broadcast()
 }
 
 func min(a, b int) int {
@@ -423,10 +429,10 @@ func (rf *Raft) ticker() {
 		// be started and to randomize sleeping time using
 		// time.Sleep().
 		rf.mu.Lock()
-		if rf.state != Follower {
-			rf.mu.Unlock()
-			continue
+		for rf.state != Follower {
+			rf.reSetElectionTimerCond.Wait()
 		}
+
 		rf.isElectionTimeOut = true
 		rf.mu.Unlock()
 		time.Sleep(rf.electionTimeOut)
@@ -502,6 +508,7 @@ func (rf *Raft) sendVote() {
 							rf.currentTerm = reply.Term
 							rf.votedFor = nil
 							rf.state = Follower
+							rf.reSetElectionTimerCond.Broadcast()
 						}
 					}
 				}
@@ -552,6 +559,7 @@ func (rf *Raft) heartbeatOrAppendEntries() {
 						rf.currentTerm = reply.Term
 						rf.isElectionTimeOut = false
 						rf.state = Follower
+						rf.reSetElectionTimerCond.Broadcast()
 					} else if !reply.Success {
 						var found bool
 						for i := range rf.logs {
@@ -654,6 +662,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	rf.electionTimeOut = time.Duration(rand.Intn(200)+300) * time.Millisecond
 	rf.heartbeatTime = time.Millisecond * 100
+
+	rf.reSetElectionTimerCond = sync.NewCond(&rf.mu)
 
 	rf.cond = sync.NewCond(&rf.mu)
 
