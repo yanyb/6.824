@@ -18,6 +18,8 @@ package raft
 //
 
 import (
+	"6.824/labgob"
+	"bytes"
 	"math/rand"
 	"sort"
 
@@ -83,7 +85,7 @@ type Raft struct {
 
 	// Persistent state
 	currentTerm int
-	votedFor    interface{}
+	votedFor    int
 	logs        []LogEntry
 
 	// Volatile state
@@ -129,12 +131,13 @@ func (rf *Raft) GetState() (int, bool) {
 func (rf *Raft) persist() {
 	// Your code here (2C).
 	// Example:
-	// w := new(bytes.Buffer)
-	// e := labgob.NewEncoder(w)
-	// e.Encode(rf.xxx)
-	// e.Encode(rf.yyy)
-	// data := w.Bytes()
-	// rf.persister.SaveRaftState(data)
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	e.Encode(rf.currentTerm)
+	e.Encode(rf.votedFor)
+	e.Encode(rf.logs)
+	data := w.Bytes()
+	rf.persister.SaveRaftState(data)
 }
 
 //
@@ -146,17 +149,19 @@ func (rf *Raft) readPersist(data []byte) {
 	}
 	// Your code here (2C).
 	// Example:
-	// r := bytes.NewBuffer(data)
-	// d := labgob.NewDecoder(r)
-	// var xxx
-	// var yyy
-	// if d.Decode(&xxx) != nil ||
-	//    d.Decode(&yyy) != nil {
-	//   error...
-	// } else {
-	//   rf.xxx = xxx
-	//   rf.yyy = yyy
-	// }
+	r := bytes.NewBuffer(data)
+	d := labgob.NewDecoder(r)
+	var currentTerm int
+	var votedFor int
+	var logs []LogEntry
+	if d.Decode(&currentTerm) != nil ||
+		d.Decode(&votedFor) != nil ||
+		d.Decode(&logs) != nil {
+	} else {
+		rf.currentTerm = currentTerm
+		rf.votedFor = votedFor
+		rf.logs = logs
+	}
 }
 
 //
@@ -218,19 +223,21 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	if args.Term > rf.currentTerm {
 		rf.currentTerm = args.Term
 		rf.state = Follower
-		rf.votedFor = nil
+		rf.votedFor = -1
 		if isLogUpToDate {
 			rf.isElectionTimeOut = false
 			rf.votedFor = args.CandidateId
 			reply.VoteGranted = true
 		}
+		rf.persist()
 		rf.reSetElectionTimerCond.Broadcast()
 	} else if isLogUpToDate {
-		if rf.votedFor == nil || rf.votedFor == args.CandidateId {
+		if rf.votedFor == -1 || rf.votedFor == args.CandidateId {
 			rf.votedFor = args.CandidateId
 			rf.state = Follower
 			rf.isElectionTimeOut = false
 			reply.VoteGranted = true
+			rf.persist()
 			rf.reSetElectionTimerCond.Broadcast()
 		}
 	}
@@ -344,8 +351,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.isElectionTimeOut = false
 	if args.Term > rf.currentTerm {
 		rf.currentTerm = args.Term
-		rf.votedFor = nil
+		rf.votedFor = -1
 	}
+	rf.persist()
 	rf.reSetElectionTimerCond.Broadcast()
 }
 
@@ -395,6 +403,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		l := len(rf.logs)
 		index = l - 1
 		// send append entry rpc
+		rf.persist()
 		rf.heartbeatOrAppendEntries()
 	}
 	return index, term, isLeader
@@ -466,6 +475,7 @@ func (rf *Raft) sendVote() {
 	// vote for self
 	rf.votedFor = rf.me
 	voteGrantedNum := 1
+	rf.persist()
 	// send request vote rpc
 	term := rf.currentTerm
 	lastLogIndex := len(rf.logs) - 1
@@ -506,8 +516,9 @@ func (rf *Raft) sendVote() {
 					} else {
 						if reply.Term > rf.currentTerm {
 							rf.currentTerm = reply.Term
-							rf.votedFor = nil
+							rf.votedFor = -1
 							rf.state = Follower
+							rf.persist()
 							rf.reSetElectionTimerCond.Broadcast()
 						}
 					}
@@ -555,10 +566,11 @@ func (rf *Raft) heartbeatOrAppendEntries() {
 						return
 					}
 					if !reply.Success && reply.Term > rf.currentTerm {
-						rf.votedFor = nil
+						rf.votedFor = -1
 						rf.currentTerm = reply.Term
 						rf.isElectionTimeOut = false
 						rf.state = Follower
+						rf.persist()
 						rf.reSetElectionTimerCond.Broadcast()
 					} else if !reply.Success {
 						var found bool
@@ -651,7 +663,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.state = Follower
 
 	rf.currentTerm = 0
-	rf.votedFor = nil
+	rf.votedFor = -1
 	rf.logs = []LogEntry{{}} // 0 as dummy
 
 	rf.commitIndex = 0
