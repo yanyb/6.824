@@ -624,11 +624,15 @@ func (rf *Raft) updateLeaderCommitIndex() {
 
 func (rf *Raft) applier(applyCh chan ApplyMsg) {
 	for rf.killed() == false {
+		commitIndex := 0
 		rf.mu.Lock()
 		for rf.commitIndex <= rf.lastApplied {
 			rf.cond.Wait()
 		}
-		for rf.commitIndex > rf.lastApplied {
+		commitIndex = rf.commitIndex
+		rf.mu.Unlock()
+
+		for commitIndex > rf.lastApplied {
 			log := rf.logs[rf.lastApplied+1]
 			rf.lastApplied++
 			applyCh <- ApplyMsg{
@@ -637,7 +641,6 @@ func (rf *Raft) applier(applyCh chan ApplyMsg) {
 				CommandIndex: rf.lastApplied,
 			}
 		}
-		rf.mu.Unlock()
 	}
 }
 
